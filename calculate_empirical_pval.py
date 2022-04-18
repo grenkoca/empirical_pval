@@ -34,8 +34,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def main(observed, null_results, group_by, out, score_column, comparison_operator, verbose=False):
-    n = len(null_results)
+def main(observed, null_results, group_by, score_column, comparison_operator, verbose=False):
 
     results_df = pd.DataFrame()
 
@@ -57,11 +56,11 @@ def main(observed, null_results, group_by, out, score_column, comparison_operato
         if len(group['set'].unique()) != 2:
             continue
 
+        if name[1] != 'INS':
+            continue
+
         observed_score = group[group['set'] == 'observed'][score_column].values[0]
         null_scores = group[group['set'] == 'null'][score_column].values
-        if verbose:
-            print(f'{name}: observed score\n{observed_score}')
-            print(f'{name}: null scores\n{null_scores}')
         # Calculate r 
         if comparison_operator == '<':
             null_scores = null_scores < observed_score
@@ -73,28 +72,37 @@ def main(observed, null_results, group_by, out, score_column, comparison_operato
             null_scores = null_scores <= observed_score
         else:
             raise ValueError("Unknown comparison operator")
-        pval = (sum(null_scores) + 1) / (n + 1)
+        
+
+        n = len(null_scores)
+        r = np.count_nonzero(null_scores)
+        
+        pval = (r + 1) / (n + 1)
 
         # Print group if significant:
-        if pval < 0.05 and verbose:
-            print("\n" + "-" * 80)
-            print(f"Group: {name}")
-            print(f"Observed score: {observed_score}")
-            print(f"Null scores: {null_scores}")
-            print(f"p-value: {pval}")
-            print("-" * 80)
+        #if pval < 0.05 and verbose:
+        print("\n" + "-" * 80)
+        print(f"Group: {name}")
+        print(f"Observed score: {observed_score}")
+        print(f"Null scores: {null_scores}")
+        print(f"p-value: {pval}")
+        print(f"({r}+1 / {n}+1)")
+        print("-" * 80)
 
         # Add groupd result to results_df
         new_row = {'pval' : pval}
         new_row.update(dict(zip(group_by, name)))
         results_df = results_df.append(pd.DataFrame(new_row, index=[name]))
 
-    # Write results to file
-    results_df.to_csv(out, sep=sep)
-
+    return results_df
 
 if __name__ == '__main__':
     args = parse_args()
-    observed = pd.read_csv(observed, index_col=0, sep=args.sep)
+    observed = pd.read_csv(args.observed, index_col=0, sep=args.sep)
     null_results = [pd.read_csv(f, index_col=0, sep=args.sep) for f in args.null_results]
-    main(args)
+    
+    results = main(observed, null_results, args.group_by, args.score_column, args.comparison_operator, True)
+
+    results.to_csv(args.out, sep=args.sep, index=None)
+
+
