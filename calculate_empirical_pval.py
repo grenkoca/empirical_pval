@@ -24,7 +24,7 @@ def parse_args():
                         help='Variable(s) to group by')
     parser.add_argument('--out', type=Path, required=True,
                         help='Path to output file')
-    parser.add_argument('--sep', type=parse_separator, default='tab', choices=['\t', ','],
+    parser.add_argument('--sep', type=parse_separator, default='tab', choices=['tab', 'comma'],
                         help='Separator in input files')
     parser.add_argument('--score_column', type=str, default='score',
                         help='Column name for score')
@@ -34,9 +34,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def main(observed, null_results, group_by, out, sep, score_column, comparison_operator):
-    observed = pd.read_csv(observed, index_col=0, sep=sep)
-    null_results = [pd.read_csv(f, index_col=0, sep=sep) for f in null_results]
+def main(observed, null_results, group_by, out, score_column, comparison_operator, verbose=False):
     n = len(null_results)
 
     results_df = pd.DataFrame()
@@ -61,9 +59,9 @@ def main(observed, null_results, group_by, out, sep, score_column, comparison_op
 
         observed_score = group[group['set'] == 'observed'][score_column].values[0]
         null_scores = group[group['set'] == 'null'][score_column].values
-        print(name)
-        print("Observed score:", observed_score)
-        print("Null scores:", null_scores)
+        if verbose:
+            print(f'{name}: observed score\n{observed_score}')
+            print(f'{name}: null scores\n{null_scores}')
         # Calculate r 
         if comparison_operator == '<':
             null_scores = null_scores < observed_score
@@ -75,12 +73,10 @@ def main(observed, null_results, group_by, out, sep, score_column, comparison_op
             null_scores = null_scores <= observed_score
         else:
             raise ValueError("Unknown comparison operator")
-        print(sum(null_scores),' + 1 / ', n, ' + 1' )
         pval = (sum(null_scores) + 1) / (n + 1)
-        print("P-value:", pval) 
 
         # Print group if significant:
-        if pval < 0.05:
+        if pval < 0.05 and verbose:
             print("\n" + "-" * 80)
             print(f"Group: {name}")
             print(f"Observed score: {observed_score}")
@@ -99,4 +95,6 @@ def main(observed, null_results, group_by, out, sep, score_column, comparison_op
 
 if __name__ == '__main__':
     args = parse_args()
+    observed = pd.read_csv(observed, index_col=0, sep=args.sep)
+    null_results = [pd.read_csv(f, index_col=0, sep=args.sep) for f in args.null_results]
     main(args)
